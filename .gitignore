@@ -1,0 +1,16 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# dbt
+rcn_warehouse/target/
+rcn_warehouse/dbt_packages/
+rcn_warehouse/logs/
+
+# OS
+.DS_Store
+
+# Secrets
+*.json
+!dbt_project.yml

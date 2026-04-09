@@ -1,0 +1,110 @@
+version: 2
+
+models:
+  - name: bridge_person_identity
+    description: Bridge table linking PCO people to ES users with match confidence
+    columns:
+      - name: pco_person_id
+        description: Foreign key to PCO people
+        tests:
+          - not_null
+      - name: es_user_id
+        description: Foreign key to ES users
+        tests:
+          - not_null
+
+  - name: dim_person
+    description: Unified person dimension - all PCO people + ES-only people, enriched with cross-platform data
+    columns:
+      - name: pco_person_id
+        description: Primary key from PCO (null for ES-only people)
+
+  - name: dim_campus
+    description: Campus/location dimension from PCO campuses joined with ES locations
+    columns:
+      - name: pco_campus_id
+        description: Primary key from Planning Center
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_group
+    description: Groups/villages dimension from Engage Spaces
+    columns:
+      - name: es_group_id
+        description: Primary key from Engage Spaces
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_team
+    description: Teams dimension from Engage Spaces
+    columns:
+      - name: es_team_id
+        description: Primary key from Engage Spaces
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_course
+    description: Training courses dimension from Engage Spaces
+    columns:
+      - name: es_course_id
+        description: Primary key from Engage Spaces
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_household
+    description: Household dimension from PCO
+    columns:
+      - name: pco_household_id
+        description: Primary key from Planning Center
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_check_in_event
+    description: Check-in event dimension from PCO
+    columns:
+      - name: pco_check_in_event_id
+        description: Primary key from Planning Center
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_service_type
+    description: Service type dimension from PCO
+    columns:
+      - name: pco_service_type_id
+        description: Primary key from Planning Center
+        tests:
+          - unique
+          - not_null
+
+  - name: fact_check_ins
+    description: Individual check-in records from PCO
+    columns:
+      - name: pco_check_in_id
+        description: Primary key from Planning Center
+        tests:
+          - unique
+          - not_null
+
+  - name: fact_headcounts
+    description: Headcount records from PCO service plan times
+    columns:
+      - name: pco_headcount_id
+        description: Primary key from Planning Center
+        tests:
+          - unique
+          - not_null
+
+  - name: fact_es_events
+    description: Event records with attendance from Engage Spaces
+    columns:
+      - name: es_event_id
+        description: Primary key from Engage Spaces
+        tests:
+          - unique
+          - not_null

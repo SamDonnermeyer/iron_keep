@@ -1,0 +1,37 @@
+version: 2
+
+models:
+  - name: mart_person_engagement
+    description: Person-level engagement summary across all platforms - check-ins, discipleship, group participation
+    columns:
+      - name: person_id
+        description: Unified person ID (pco_person_id or es_user_id for ES-only)
+        tests:
+          - not_null
+
+  - name: mart_campus_summary
+    description: Campus-level summary with group counts and location details
+    columns:
+      - name: pco_campus_id
+        description: Primary key from Planning Center
+        tests:
+          - unique
+          - not_null
+
+  - name: mart_village_summary
+    description: Village/group-level summary with member counts and campus attribution
+    columns:
+      - name: es_group_id
+        description: Primary key from Engage Spaces
+        tests:
+          - unique
+          - not_null
+
+  - name: mart_attendance_trends
+    description: Weekly attendance trends combining headcounts and individual check-ins
+    columns:
+      - name: week_start
+        description: Start of the week (Monday)
+        tests:
+          - unique
+          - not_null

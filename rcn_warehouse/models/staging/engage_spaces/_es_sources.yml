@@ -1,0 +1,19 @@
+version: 2
+
+sources:
+  - name: engage_spaces
+    database: resonate-data-warehouse-442601
+    schema: engage_spaces
+    tables:
+      - name: users
+        description: Engage Spaces user/member records
+      - name: groups
+        description: Engage Spaces group records (villages, teams, etc.)
+      - name: courses
+        description: Engage Spaces training courses
+      - name: events
+        description: Engage Spaces event records
+      - name: teams
+        description: Engage Spaces team records
+      - name: locations
+        description: Engage Spaces location/site records

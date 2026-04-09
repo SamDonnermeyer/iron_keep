@@ -1,0 +1,21 @@
+version: 2
+
+sources:
+  - name: planning_center
+    database: resonate-data-warehouse-442601
+    schema: planning_center
+    tables:
+      - name: people
+        description: PCO people records (JSON API format)
+      - name: campuses
+        description: PCO campus/location records
+      - name: households
+        description: PCO household groupings
+      - name: check_ins
+        description: PCO check-in records for events and services
+      - name: check_in_events
+        description: PCO check-in event definitions
+      - name: headcounts
+        description: PCO headcount records for service plan times
+      - name: service_types
+        description: PCO service type definitions
