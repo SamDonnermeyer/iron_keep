@@ -1,5 +1,6 @@
 -- Bridge table linking person records across PCO and Engage Spaces
--- Matches on email (highest confidence) and normalized name
+-- Matches on email (highest confidence), then normalized name
+-- Uses campus/site as a disambiguator to boost name-match confidence
 -- Provides match quality signals for downstream consumption
 
 with pco_people as (
@@ -8,7 +9,8 @@ with pco_people as (
         lower(trim(first_name)) as first_name_norm,
         lower(trim(last_name)) as last_name_norm,
         first_name,
-        last_name
+        last_name,
+        pco_campus_id
     from {{ ref('stg_pco_people') }}
 ),
 
@@ -35,6 +37,15 @@ es_users as (
     from {{ ref('stg_es_users') }}
 ),
 
+-- Campus mapping: PCO campus ID → ES location ID
+campus_map as (
+    select
+        pco_campus_id,
+        es_location_id
+    from {{ ref('dim_campus') }}
+    where es_location_id is not null
+),
+
 -- Match 1: Email-based (highest confidence)
 email_matches as (
     select
@@ -48,7 +59,8 @@ email_matches as (
         es.es_email,
         es.es_site_ids,
         'email' as match_method,
-        'exact' as match_confidence
+        'exact' as match_confidence,
+        cast(null as bool) as campus_match
     from pco_emails pco
     inner join es_users es
         on pco.pco_email = es.es_email
@@ -79,6 +91,7 @@ es_name_counts as (
 ),
 
 -- Match 2: Name-based (only for people not already matched by email)
+-- Campus is used to boost confidence: ambiguous+campus → likely, likely+campus → exact
 name_matches as (
     select
         pco.pco_person_id,
@@ -91,11 +104,29 @@ name_matches as (
         es.es_email,
         es.es_site_ids,
         'name' as match_method,
+        -- Base confidence from name uniqueness, boosted by campus match
         case
             when pco_nc.pco_count = 1 and es_nc.es_count = 1 then 'exact'
-            when pco_nc.pco_count = 1 or es_nc.es_count = 1 then 'likely'
-            else 'ambiguous'
-        end as match_confidence
+            when (pco_nc.pco_count = 1 or es_nc.es_count = 1)
+                then case
+                    when cm.es_location_id is not null
+                        and es.es_site_ids like concat('%', cm.es_location_id, '%')
+                        then 'exact'   -- likely + campus match → exact
+                    else 'likely'
+                end
+            else case
+                when cm.es_location_id is not null
+                    and es.es_site_ids like concat('%', cm.es_location_id, '%')
+                    then 'likely'      -- ambiguous + campus match → likely
+                else 'ambiguous'
+            end
+        end as match_confidence,
+        case
+            when cm.es_location_id is not null
+                and es.es_site_ids like concat('%', cm.es_location_id, '%')
+                then true
+            else false
+        end as campus_match
     from pco_people pco
     inner join es_users es
         on pco.first_name_norm = es.first_name_norm
@@ -106,6 +137,8 @@ name_matches as (
     left join es_name_counts es_nc
         on es.first_name_norm = es_nc.first_name_norm
         and es.last_name_norm = es_nc.last_name_norm
+    left join campus_map cm
+        on pco.pco_campus_id = cm.pco_campus_id
     where pco.pco_person_id not in (select pco_person_id from email_matched_pco)
       and es.es_user_id not in (select es_user_id from email_matched_es)
 ),

@@ -23,6 +23,7 @@ parsed as (
         cast(json_value(attributes, '$.avatar') as string) as avatar_url,
         cast(json_value(attributes, '$.directory_status') as string) as directory_status,
         cast(json_value(attributes, '$.passed_background_check') as bool) as passed_background_check,
+        cast(json_value(relationships, '$.primary_campus.data.id') as string) as pco_campus_id,
         timestamp(json_value(attributes, '$.inactivated_at')) as inactivated_at,
         timestamp(json_value(attributes, '$.created_at')) as created_at,
         timestamp(json_value(attributes, '$.updated_at')) as updated_at,

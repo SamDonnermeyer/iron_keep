@@ -52,6 +52,7 @@ joined as (
     from pco_campuses pco
     left join es_locations es
         on lower(pco.campus_name) = lower(es.location_name)
+        or (lower(pco.campus_name) = 'salt lake' and lower(es.location_name) = 'salt lake city')
 )
 
 select * from joined

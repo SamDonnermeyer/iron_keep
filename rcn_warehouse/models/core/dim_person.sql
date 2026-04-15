@@ -62,7 +62,7 @@ es_users as (
     from {{ ref('stg_es_users') }}
 ),
 
--- Pick best ES match per PCO person (email > exact name > likely > ambiguous)
+-- Pick best ES match per PCO person (email > campus-boosted name > name)
 bridge_ranked as (
     select
         *,
@@ -75,6 +75,7 @@ bridge_ranked as (
                     when 'likely' then 2
                     when 'ambiguous' then 3
                 end,
+                case when campus_match then 0 else 1 end,
                 es_user_id desc
         ) as rn
     from {{ ref('bridge_person_identity') }}
@@ -91,6 +92,7 @@ pco_enriched as (
         bm.es_user_id,
         bm.match_method as es_match_method,
         bm.match_confidence as es_match_confidence,
+        bm.campus_match as es_campus_match,
         pco.first_name,
         pco.last_name,
         pco.full_name,
@@ -109,6 +111,7 @@ pco_enriched as (
         pco.avatar_url,
         pco.directory_status,
         pco.passed_background_check,
+        pco.pco_campus_id,
         -- Contact info from PCO
         pe.pco_email,
         pp.pco_phone,
@@ -176,6 +179,7 @@ es_only as (
         es.es_user_id,
         cast(null as string) as es_match_method,
         cast(null as string) as es_match_confidence,
+        cast(null as bool) as es_campus_match,
         es.first_name,
         es.last_name,
         concat(es.first_name, ' ', es.last_name) as full_name,
@@ -194,6 +198,7 @@ es_only as (
         cast(null as string) as avatar_url,
         cast(null as string) as directory_status,
         cast(null as bool) as passed_background_check,
+        cast(null as string) as pco_campus_id,
         -- No PCO contact info
         cast(null as string) as pco_email,
         cast(null as string) as pco_phone,
