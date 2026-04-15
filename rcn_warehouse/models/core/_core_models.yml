@@ -2,7 +2,7 @@ version: 2
 
 models:
   - name: bridge_person_identity
-    description: Bridge table linking PCO people to ES users with match confidence
+    description: Bridge table linking PCO people to ES users via email and name matching
     columns:
       - name: pco_person_id
         description: Foreign key to PCO people
@@ -13,8 +13,11 @@ models:
         tests:
           - not_null
 
+  - name: int_pco_person_custom_fields
+    description: Pivoted PCO custom field data — one row per person with baptism, demographic, ownership, and other fields as columns
+
   - name: dim_person
-    description: Unified person dimension - all PCO people + ES-only people, enriched with cross-platform data
+    description: Unified person dimension with PCO contact info, custom fields, and ES enrichment
     columns:
       - name: pco_person_id
         description: Primary key from PCO (null for ES-only people)
@@ -105,6 +108,24 @@ models:
     columns:
       - name: es_event_id
         description: Primary key from Engage Spaces
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_plan
+    description: Service plan dimension from PCO — individual worship services
+    columns:
+      - name: pco_plan_id
+        description: Primary key from Planning Center
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_service_team
+    description: Service team definitions from PCO (band, tech, greeters, etc.)
+    columns:
+      - name: pco_service_team_id
+        description: Primary key from Planning Center
         tests:
           - unique
           - not_null

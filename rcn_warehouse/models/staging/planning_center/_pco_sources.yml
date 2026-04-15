@@ -19,3 +19,17 @@ sources:
         description: PCO headcount records for service plan times
       - name: service_types
         description: PCO service type definitions
+      - name: emails
+        description: PCO email addresses linked to people
+      - name: phone_numbers
+        description: PCO phone numbers linked to people
+      - name: addresses
+        description: PCO physical addresses linked to people
+      - name: field_data
+        description: PCO custom field values (baptism, demographic, etc.)
+      - name: field_definitions
+        description: PCO custom field definitions (lookup table for field_data)
+      - name: plans
+        description: PCO service plans (individual worship services)
+      - name: service_teams
+        description: PCO team definitions within the services module

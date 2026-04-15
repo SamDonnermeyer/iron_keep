@@ -1,6 +1,6 @@
 -- Bridge table linking person records across PCO and Engage Spaces
--- Handles the many-to-many relationship and provides match quality signals
--- This replaces the simple left join in dim_person for identity resolution
+-- Matches on email (highest confidence) and normalized name
+-- Provides match quality signals for downstream consumption
 
 with pco_people as (
     select
@@ -8,9 +8,19 @@ with pco_people as (
         lower(trim(first_name)) as first_name_norm,
         lower(trim(last_name)) as last_name_norm,
         first_name,
-        last_name,
-        status
+        last_name
     from {{ ref('stg_pco_people') }}
+),
+
+-- Get primary email per PCO person
+pco_emails as (
+    select
+        pco_person_id,
+        lower(trim(email_address)) as pco_email
+    from {{ ref('stg_pco_emails') }}
+    where is_primary = true
+      and is_blocked = false
+      and email_address is not null
 ),
 
 es_users as (
@@ -20,27 +30,56 @@ es_users as (
         lower(trim(last_name)) as last_name_norm,
         first_name,
         last_name,
-        username as es_email,
+        lower(trim(username)) as es_email,
         site as es_site_ids
     from {{ ref('stg_es_users') }}
 ),
 
--- Count how many PCO records share each name
+-- Match 1: Email-based (highest confidence)
+email_matches as (
+    select
+        pco.pco_person_id,
+        es.es_user_id,
+        pco_p.first_name as pco_first_name,
+        pco_p.last_name as pco_last_name,
+        es.first_name as es_first_name,
+        es.last_name as es_last_name,
+        pco.pco_email,
+        es.es_email,
+        es.es_site_ids,
+        'email' as match_method,
+        'exact' as match_confidence
+    from pco_emails pco
+    inner join es_users es
+        on pco.pco_email = es.es_email
+        and pco.pco_email != ''
+    inner join pco_people pco_p
+        on pco.pco_person_id = pco_p.pco_person_id
+),
+
+-- Track which pairs were already matched by email
+email_matched_pco as (
+    select distinct pco_person_id from email_matches
+),
+email_matched_es as (
+    select distinct es_user_id from email_matches
+),
+
+-- Count name occurrences for confidence scoring on name matches
 pco_name_counts as (
     select first_name_norm, last_name_norm, count(*) as pco_count
     from pco_people
     group by 1, 2
 ),
 
--- Count how many ES records share each name
 es_name_counts as (
     select first_name_norm, last_name_norm, count(*) as es_count
     from es_users
     group by 1, 2
 ),
 
--- Join on normalized name and annotate match quality
-matched as (
+-- Match 2: Name-based (only for people not already matched by email)
+name_matches as (
     select
         pco.pco_person_id,
         es.es_user_id,
@@ -48,10 +87,10 @@ matched as (
         pco.last_name as pco_last_name,
         es.first_name as es_first_name,
         es.last_name as es_last_name,
+        cast(null as string) as pco_email,
         es.es_email,
         es.es_site_ids,
-        pco_nc.pco_count,
-        es_nc.es_count,
+        'name' as match_method,
         case
             when pco_nc.pco_count = 1 and es_nc.es_count = 1 then 'exact'
             when pco_nc.pco_count = 1 or es_nc.es_count = 1 then 'likely'
@@ -67,6 +106,14 @@ matched as (
     left join es_name_counts es_nc
         on es.first_name_norm = es_nc.first_name_norm
         and es.last_name_norm = es_nc.last_name_norm
+    where pco.pco_person_id not in (select pco_person_id from email_matched_pco)
+      and es.es_user_id not in (select es_user_id from email_matched_es)
+),
+
+combined as (
+    select * from email_matches
+    union all
+    select * from name_matches
 )
 
-select * from matched
+select * from combined

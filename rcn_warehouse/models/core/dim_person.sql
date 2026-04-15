@@ -1,10 +1,45 @@
 -- Unified person dimension
 -- Includes all PCO people + ES-only people (not in PCO)
--- Uses bridge_person_identity for cross-platform matching
--- When multiple ES matches exist, takes the highest-confidence match
+-- Enriched with: PCO emails, phones, addresses, custom fields, and ES data
+-- Uses bridge_person_identity for cross-platform matching (email + name)
 
 with pco_people as (
     select * from {{ ref('stg_pco_people') }}
+),
+
+-- Primary email per PCO person
+pco_primary_emails as (
+    select pco_person_id, email_address as pco_email
+    from {{ ref('stg_pco_emails') }}
+    where is_primary = true and is_blocked = false
+    qualify row_number() over (partition by pco_person_id order by updated_at desc) = 1
+),
+
+-- Primary phone per PCO person
+pco_primary_phones as (
+    select pco_person_id, phone_number as pco_phone, carrier as pco_phone_carrier
+    from {{ ref('stg_pco_phone_numbers') }}
+    where is_primary = true
+    qualify row_number() over (partition by pco_person_id order by updated_at desc) = 1
+),
+
+-- Primary address per PCO person
+pco_primary_addresses as (
+    select
+        pco_person_id,
+        street_line_1 as pco_street,
+        city as pco_city,
+        state as pco_state,
+        zip as pco_zip,
+        country_name as pco_country
+    from {{ ref('stg_pco_addresses') }}
+    where is_primary = true
+    qualify row_number() over (partition by pco_person_id order by updated_at desc) = 1
+),
+
+-- Pivoted custom fields
+custom_fields as (
+    select * from {{ ref('int_pco_person_custom_fields') }}
 ),
 
 es_users as (
@@ -27,13 +62,14 @@ es_users as (
     from {{ ref('stg_es_users') }}
 ),
 
--- Pick best ES match per PCO person (exact > likely > ambiguous, then most recent)
+-- Pick best ES match per PCO person (email > exact name > likely > ambiguous)
 bridge_ranked as (
     select
         *,
         row_number() over (
             partition by pco_person_id
             order by
+                case match_method when 'email' then 0 else 1 end,
                 case match_confidence
                     when 'exact' then 1
                     when 'likely' then 2
@@ -48,11 +84,12 @@ best_match as (
     select * from bridge_ranked where rn = 1
 ),
 
--- PCO people enriched with best ES match
+-- PCO people enriched with all data sources
 pco_enriched as (
     select
         pco.pco_person_id,
         bm.es_user_id,
+        bm.match_method as es_match_method,
         bm.match_confidence as es_match_confidence,
         pco.first_name,
         pco.last_name,
@@ -72,6 +109,39 @@ pco_enriched as (
         pco.avatar_url,
         pco.directory_status,
         pco.passed_background_check,
+        -- Contact info from PCO
+        pe.pco_email,
+        pp.pco_phone,
+        pp.pco_phone_carrier,
+        pa.pco_street,
+        pa.pco_city,
+        pa.pco_state,
+        pa.pco_zip,
+        pa.pco_country,
+        -- Custom fields from PCO (pivoted)
+        cf.is_baptized,
+        cf.baptism_date,
+        cf.baptism_details,
+        cf.baptism_site,
+        cf.school_year,
+        cf.demographic,
+        cf.major,
+        cf.employment,
+        cf.vocation,
+        cf.ownership_start_date,
+        cf.ownership_end_date,
+        cf.village_leaders,
+        cf.huddle_leader,
+        cf.serving,
+        cf.skills_interests,
+        cf.send_trips,
+        cf.affinity_group,
+        cf.apest_result_1,
+        cf.apest_result_2,
+        cf.discipleship_type,
+        cf.staff_role,
+        cf.archived_campus,
+        -- ES fields (when matched)
         es.es_email,
         es.belief_status,
         es.relational_status,
@@ -89,6 +159,10 @@ pco_enriched as (
     from pco_people pco
     left join best_match bm on pco.pco_person_id = bm.pco_person_id
     left join es_users es on bm.es_user_id = es.es_user_id
+    left join pco_primary_emails pe on pco.pco_person_id = pe.pco_person_id
+    left join pco_primary_phones pp on pco.pco_person_id = pp.pco_person_id
+    left join pco_primary_addresses pa on pco.pco_person_id = pa.pco_person_id
+    left join custom_fields cf on pco.pco_person_id = cf.pco_person_id
 ),
 
 -- ES-only people (no PCO match at all)
@@ -100,6 +174,7 @@ es_only as (
     select
         cast(null as string) as pco_person_id,
         es.es_user_id,
+        cast(null as string) as es_match_method,
         cast(null as string) as es_match_confidence,
         es.first_name,
         es.last_name,
@@ -119,6 +194,39 @@ es_only as (
         cast(null as string) as avatar_url,
         cast(null as string) as directory_status,
         cast(null as bool) as passed_background_check,
+        -- No PCO contact info
+        cast(null as string) as pco_email,
+        cast(null as string) as pco_phone,
+        cast(null as string) as pco_phone_carrier,
+        cast(null as string) as pco_street,
+        cast(null as string) as pco_city,
+        cast(null as string) as pco_state,
+        cast(null as string) as pco_zip,
+        cast(null as string) as pco_country,
+        -- No PCO custom fields
+        cast(null as string) as is_baptized,
+        cast(null as string) as baptism_date,
+        cast(null as string) as baptism_details,
+        cast(null as string) as baptism_site,
+        cast(null as string) as school_year,
+        cast(null as string) as demographic,
+        cast(null as string) as major,
+        cast(null as string) as employment,
+        cast(null as string) as vocation,
+        cast(null as string) as ownership_start_date,
+        cast(null as string) as ownership_end_date,
+        cast(null as string) as village_leaders,
+        cast(null as string) as huddle_leader,
+        cast(null as string) as serving,
+        cast(null as string) as skills_interests,
+        cast(null as string) as send_trips,
+        cast(null as string) as affinity_group,
+        cast(null as string) as apest_result_1,
+        cast(null as string) as apest_result_2,
+        cast(null as string) as discipleship_type,
+        cast(null as string) as staff_role,
+        cast(null as string) as archived_campus,
+        -- ES fields
         es.es_email,
         es.belief_status,
         es.relational_status,
