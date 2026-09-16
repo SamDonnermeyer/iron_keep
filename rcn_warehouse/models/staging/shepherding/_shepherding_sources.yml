@@ -46,7 +46,8 @@ models:
       - name: status
         tests:
           - accepted_values:
-              values: ['not_built', 'active', 'paused', 'closed']
+              arguments:
+                values: ['not_built', 'active', 'paused', 'closed']
 
   - name: stg_shepherding_villages
     description: Village registry, typed. One row per village per academic year.
@@ -60,8 +61,9 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('stg_shepherding_churches')
-              field: church_code
+              arguments:
+                to: ref('stg_shepherding_churches')
+                field: church_code
 
   - name: stg_shepherding_roster
     description: Person roster per village, typed. Includes rows retired by name corrections.
@@ -75,19 +77,22 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('stg_shepherding_villages')
-              field: village_id
+              arguments:
+                to: ref('stg_shepherding_villages')
+                field: village_id
       - name: name_completeness
         description: full = first and last name; partial = first name only (45% of the roster).
         tests:
           - accepted_values:
-              values: ['full', 'partial']
+              arguments:
+                values: ['full', 'partial']
       - name: superseded_by
         description: The person_local_id that replaced this row after a name correction.
         tests:
           - relationships:
-              to: ref('stg_shepherding_roster')
-              field: person_local_id
+              arguments:
+                to: ref('stg_shepherding_roster')
+                field: person_local_id
       - name: choice_label
         description: Exact string shown in the form checkbox. Must be unique within a village.
         tests:
@@ -107,8 +112,9 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('stg_shepherding_villages')
-              field: village_id
+              arguments:
+                to: ref('stg_shepherding_villages')
+                field: village_id
       - name: gathering_date
         description: Date of the gathering itself, not the date the form was sent.
         tests:
@@ -116,7 +122,8 @@ models:
       - name: status
         tests:
           - accepted_values:
-              values: ['processed', 'pending', 'error']
+              arguments:
+                values: ['processed', 'pending', 'error']
 
   - name: stg_shepherding_attendance_log
     description: One row per attendee per submission, typed. Presence only.
@@ -125,11 +132,13 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('stg_shepherding_submissions')
-              field: submission_id
+              arguments:
+                to: ref('stg_shepherding_submissions')
+                field: submission_id
       - name: person_local_id
         tests:
           - not_null
           - relationships:
-              to: ref('stg_shepherding_roster')
-              field: person_local_id
+              arguments:
+                to: ref('stg_shepherding_roster')
+                field: person_local_id

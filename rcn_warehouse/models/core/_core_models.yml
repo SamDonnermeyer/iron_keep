@@ -208,8 +208,9 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('dim_village')
-              field: village_id
+              arguments:
+                to: ref('dim_village')
+                field: village_id
       - name: pco_match_confidence
         description: >
           Quality of the best-effort link to dim_person. Check this before using
@@ -217,7 +218,8 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ['exact', 'likely', 'ambiguous', 'unmatched']
+              arguments:
+                values: ['exact', 'likely', 'ambiguous', 'unmatched']
 
   - name: fact_village_submission
     description: Audit fact — one row per form submission, exactly as sent. Use fact_village_gathering for reporting.
@@ -241,8 +243,9 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('dim_village')
-              field: village_id
+              arguments:
+                to: ref('dim_village')
+                field: village_id
       - name: gathering_date
         tests:
           - not_null
@@ -263,8 +266,9 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('dim_village_member')
-              field: person_local_id
+              arguments:
+                to: ref('dim_village_member')
+                field: person_local_id
       - name: attended_flag
         tests:
           - not_null

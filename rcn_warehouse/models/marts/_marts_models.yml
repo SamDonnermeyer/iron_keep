@@ -74,4 +74,5 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ['engaged', 'watch', 'drifting', 'retired', 'no_data']
+              arguments:
+                values: ['engaged', 'watch', 'drifting', 'retired', 'no_data']
