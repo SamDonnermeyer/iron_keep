@@ -35,3 +35,43 @@ models:
         tests:
           - unique
           - not_null
+
+  - name: mart_village_attendance
+    description: >
+      Village health over time — one row per village per gathering date with
+      attendance rate, trailing average and gap-since-last-meeting. Keyed on the
+      Shepherding village_id with real recorded attendance, unlike
+      mart_village_summary which infers ES group membership from a name substring.
+    columns:
+      - name: village_gathering_sk
+        description: Primary key — one row per village per gathering date
+        tests:
+          - unique
+          - not_null
+      - name: village_id
+        tests:
+          - not_null
+      - name: gathering_date
+        tests:
+          - not_null
+
+  - name: mart_village_member_engagement
+    description: >
+      Person-level engagement within a village — attendance rate, consecutive
+      misses and a drift signal, measured only against gatherings the member was
+      eligible for.
+    columns:
+      - name: person_local_id
+        description: Primary key from the Shepherding roster
+        tests:
+          - unique
+          - not_null
+      - name: village_id
+        tests:
+          - not_null
+      - name: engagement_status
+        description: engaged | watch | drifting | retired | no_data. Thresholds are placeholders pending team input.
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['engaged', 'watch', 'drifting', 'retired', 'no_data']

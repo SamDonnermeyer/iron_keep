@@ -22,6 +22,8 @@ models:
         +schema: staging
       engage_spaces:
         +schema: staging
+      shepherding:
+        +schema: staging
     core:
       +materialized: table
       +schema: core

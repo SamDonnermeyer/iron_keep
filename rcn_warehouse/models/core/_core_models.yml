@@ -129,3 +129,142 @@ models:
         tests:
           - unique
           - not_null
+
+  # ---------------------------------------------------------------------------
+  # Shepherding Tool — village attendance
+  # ---------------------------------------------------------------------------
+
+  - name: int_shepherding_roster_resolved
+    description: >
+      Roster rows with name-correction chains walked forward to a single current
+      identity. Attendance submitted before a correction points at the retired
+      person_local_id, so anything that counts people must resolve here first.
+    columns:
+      - name: person_local_id
+        tests:
+          - unique
+          - not_null
+      - name: current_person_local_id
+        description: The identity this row ultimately resolves to. Equals person_local_id for current rows.
+        tests:
+          - not_null
+
+  - name: int_shepherding_attendance_resolved
+    description: >
+      Attendance de-duplicated to one row per person per village gathering.
+      Collapses re-submissions by union (present if ANY submission lists them)
+      and maps superseded person ids forward.
+    columns:
+      - name: person_local_id
+        tests:
+          - not_null
+      - name: gathering_date
+        tests:
+          - not_null
+
+  - name: int_shepherding_membership_window
+    description: >
+      The date range over which each current member counts toward the attendance
+      denominator. Opens at the earlier of (roster row created, first gathering
+      attended) because first_seen_at is a script-write timestamp that commonly
+      postdates gatherings the person actually attended.
+    columns:
+      - name: person_local_id
+        tests:
+          - unique
+          - not_null
+      - name: membership_start_date
+        tests:
+          - not_null
+
+  - name: dim_village
+    description: >
+      Village dimension from the Shepherding Tool, keyed on the permanent
+      village_id. Prefer this over dim_group for anything village-related —
+      dim_group carries Engage Spaces groups keyed only by name.
+    columns:
+      - name: village_id
+        description: Permanent village key. Never changes, even on rename.
+        tests:
+          - unique
+          - not_null
+      - name: church_code
+        tests:
+          - not_null
+      - name: pco_campus_id
+        description: Campus resolved by name against dim_campus. Null for closed campuses no longer in PCO.
+
+  - name: dim_village_member
+    description: >
+      One row per roster entry, including rows retired by name corrections
+      (is_current = false). Facts carry the current id, so fact-to-dimension
+      joins on person_local_id are 1:1.
+    columns:
+      - name: person_local_id
+        tests:
+          - unique
+          - not_null
+      - name: village_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_village')
+              field: village_id
+      - name: pco_match_confidence
+        description: >
+          Quality of the best-effort link to dim_person. Check this before using
+          pco_person_id — 45% of the roster is first-name-only and unmatchable.
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['exact', 'likely', 'ambiguous', 'unmatched']
+
+  - name: fact_village_submission
+    description: Audit fact — one row per form submission, exactly as sent. Use fact_village_gathering for reporting.
+    columns:
+      - name: submission_id
+        tests:
+          - unique
+          - not_null
+
+  - name: fact_village_gathering
+    description: >
+      One row per village per gathering date, with re-submissions collapsed.
+      attendee_count is distinct people across all submissions for that date,
+      not the headcount from any single form.
+    columns:
+      - name: village_gathering_sk
+        tests:
+          - unique
+          - not_null
+      - name: village_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_village')
+              field: village_id
+      - name: gathering_date
+        tests:
+          - not_null
+      - name: eligible_member_count
+        description: Denominator — members whose membership window covers this date.
+
+  - name: fact_village_attendance
+    description: >
+      One row per member per village gathering, present OR absent. The source
+      records presence only; absences are materialised here against the roster
+      so attendance rates have a denominator.
+    columns:
+      - name: village_attendance_sk
+        tests:
+          - unique
+          - not_null
+      - name: person_local_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_village_member')
+              field: person_local_id
+      - name: attended_flag
+        tests:
+          - not_null

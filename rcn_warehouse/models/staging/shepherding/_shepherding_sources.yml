@@ -1,0 +1,135 @@
+version: 2
+
+sources:
+  - name: shepherding
+    database: resonate-data-warehouse-442601
+    schema: shepherding
+    description: >
+      Shepherding Tool v1.1 — village attendance collected through per-church
+      Google Forms and consolidated by an Apps Script project into a single
+      control spreadsheet. Exposed to BigQuery as Sheets-backed external tables,
+      so these are always live against the workbook; there is no Airbyte sync
+      and no _airbyte_extracted_at. Every column is STRING by design — see
+      setup/shepherding_external_tables.sql for why, and the sheet_* macros for
+      how they are parsed.
+    tables:
+      - name: churches
+        description: Campus registry. One row per RCN campus, hand-seeded, with workbook/form IDs written back by Builder.gs.
+      - name: villages
+        description: Village registry. One row per village per academic year, keyed by the permanent village_id.
+      - name: roster
+        description: Person roster per village. Append-only; name corrections retire a row and point superseded_by at its replacement.
+      - name: submissions
+        description: One row per submitted attendance form response. Not unique on (village_id, gathering_date) — leaders re-submit.
+      - name: attendance_log
+        description: One row per attendee per submission. Presence only; absences are inferred downstream.
+      - name: errors
+        description: >
+          Apps Script operational log (Builder, FormSync, Poller). Declared so the
+          table is documented and queryable for pipeline monitoring; intentionally
+          has no staging model, as it carries no reporting data.
+
+models:
+  - name: stg_shepherding_churches
+    description: Campus registry, typed. status is one of not_built, active, paused, closed.
+    columns:
+      - name: church_code
+        description: Three uppercase letters, stable forever. Natural key carried on every fact row.
+        tests:
+          - unique
+          - not_null
+      - name: church_sk
+        description: Permanent surrogate campus ID assigned in the workbook. Never reused or reassigned.
+        tests:
+          - unique
+          - not_null
+      - name: status
+        tests:
+          - accepted_values:
+              values: ['not_built', 'active', 'paused', 'closed']
+
+  - name: stg_shepherding_villages
+    description: Village registry, typed. One row per village per academic year.
+    columns:
+      - name: village_id
+        description: "{church_code}-{YY}-V##. Assigned at create, never changes, even if the village is renamed or the leaders change."
+        tests:
+          - unique
+          - not_null
+      - name: church_code
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_shepherding_churches')
+              field: church_code
+
+  - name: stg_shepherding_roster
+    description: Person roster per village, typed. Includes rows retired by name corrections.
+    columns:
+      - name: person_local_id
+        description: "{village_id}-P###. Stable until a name correction supersedes the row."
+        tests:
+          - unique
+          - not_null
+      - name: village_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_shepherding_villages')
+              field: village_id
+      - name: name_completeness
+        description: full = first and last name; partial = first name only (45% of the roster).
+        tests:
+          - accepted_values:
+              values: ['full', 'partial']
+      - name: superseded_by
+        description: The person_local_id that replaced this row after a name correction.
+        tests:
+          - relationships:
+              to: ref('stg_shepherding_roster')
+              field: person_local_id
+      - name: choice_label
+        description: Exact string shown in the form checkbox. Must be unique within a village.
+        tests:
+          - not_null
+
+  - name: stg_shepherding_submissions
+    description: >
+      One row per form response, typed. Deliberately NOT unique on
+      (village_id, gathering_date) — leaders re-submit, and that is resolved in
+      fact_village_gathering rather than hidden here.
+    columns:
+      - name: submission_id
+        tests:
+          - unique
+          - not_null
+      - name: village_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_shepherding_villages')
+              field: village_id
+      - name: gathering_date
+        description: Date of the gathering itself, not the date the form was sent.
+        tests:
+          - not_null
+      - name: status
+        tests:
+          - accepted_values:
+              values: ['processed', 'pending', 'error']
+
+  - name: stg_shepherding_attendance_log
+    description: One row per attendee per submission, typed. Presence only.
+    columns:
+      - name: submission_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_shepherding_submissions')
+              field: submission_id
+      - name: person_local_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_shepherding_roster')
+              field: person_local_id
